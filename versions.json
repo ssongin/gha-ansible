@@ -2,5 +2,9 @@
   {
     "label": "Latest (master)",
     "path": ""
+  },
+  {
+    "label": "v0.1.1",
+    "path": "versions/v0.1.1/"
   }
 ]
