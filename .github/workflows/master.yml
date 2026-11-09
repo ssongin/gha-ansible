@@ -22,7 +22,9 @@ jobs:
     uses: ssongin/gha-commit/.github/workflows/bump-version-tag.yml@master
 
   publish-tagged-docs:
-    needs: bump-version-tag
+    needs:
+      - bump-version-tag
+      - publish-docs
     if: needs.bump-version-tag.outputs.tag != ''
     permissions:
       contents: write
