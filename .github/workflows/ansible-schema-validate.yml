@@ -1,0 +1,38 @@
+name: Validate Ansible variables
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Base directory for schema_file and vars_paths
+        required: false
+        default: .
+        type: string
+      schema_file:
+        description: JSON Schema file in JSON or YAML format
+        required: true
+        type: string
+      vars_paths:
+        description: Newline-separated YAML file or directory paths to validate
+        required: true
+        type: string
+      python_version:
+        description: Python version used to install the schema validator
+        required: false
+        default: '3.x'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssongin/gha-ansible/.github/actions/ansible-schema-validate@master
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          schema_file: ${{ inputs.schema_file }}
+          vars_paths: ${{ inputs.vars_paths }}
+          python_version: ${{ inputs.python_version }}

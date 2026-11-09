@@ -1,0 +1,156 @@
+name: Ansible CI
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing the Ansible project
+        required: false
+        default: .
+        type: string
+      python_version:
+        description: Python version used to install Ansible tools
+        required: false
+        default: '3.x'
+        type: string
+      ansible_core_version:
+        description: ansible-core version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+      ansible_lint_version:
+        description: ansible-lint version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+      requirements_file:
+        description: Optional pip requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      galaxy_requirements_file:
+        description: Optional Galaxy requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      playbook:
+        description: Playbook file to check and optionally execute
+        required: false
+        default: site.yml
+        type: string
+      molecule:
+        description: Run Molecule after the syntax check
+        required: false
+        default: false
+        type: boolean
+      molecule_directory:
+        description: Directory containing molecule.yml; defaults to working_directory
+        required: false
+        default: ''
+        type: string
+      validate_vars:
+        description: Validate selected group_vars or host_vars against a schema
+        required: false
+        default: false
+        type: boolean
+      schema_file:
+        description: JSON or YAML Schema file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      vars_paths:
+        description: Newline-separated variable file or directory paths, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      publish_collection:
+        description: Publish a previously built collection after successful checks
+        required: false
+        default: false
+        type: boolean
+      collection_source:
+        description: Path to the collection source directory containing galaxy.yml
+        required: false
+        default: ''
+        type: string
+      run_playbook:
+        description: Execute the playbook after successful checks
+        required: false
+        default: false
+        type: boolean
+      inventory:
+        description: Optional inventory path or inline inventory value
+        required: false
+        default: ''
+        type: string
+      extra_args:
+        description: Additional ansible-playbook arguments for execution
+        required: false
+        default: ''
+        type: string
+    secrets:
+      galaxy_api_key:
+        description: Ansible Galaxy API key; required only when publishing
+        required: false
+      vault_password:
+        description: Ansible Vault password; used only when executing a playbook
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: ssongin/gha-ansible/.github/workflows/ansible-lint.yml@master
+    with:
+      working_directory: ${{ inputs.working_directory }}
+      python_version: ${{ inputs.python_version }}
+      ansible_lint_version: ${{ inputs.ansible_lint_version }}
+      requirements_file: ${{ inputs.requirements_file }}
+
+  test:
+    uses: ssongin/gha-ansible/.github/workflows/ansible-test.yml@master
+    with:
+      working_directory: ${{ inputs.working_directory }}
+      python_version: ${{ inputs.python_version }}
+      ansible_core_version: ${{ inputs.ansible_core_version }}
+      requirements_file: ${{ inputs.requirements_file }}
+      galaxy_requirements_file: ${{ inputs.galaxy_requirements_file }}
+      playbook: ${{ inputs.playbook }}
+      molecule: ${{ inputs.molecule }}
+      molecule_directory: ${{ inputs.molecule_directory }}
+
+  schema-validation:
+    if: inputs.validate_vars
+    uses: ssongin/gha-ansible/.github/workflows/ansible-schema-validate.yml@master
+    with:
+      working_directory: ${{ inputs.working_directory }}
+      schema_file: ${{ inputs.schema_file }}
+      vars_paths: ${{ inputs.vars_paths }}
+      python_version: ${{ inputs.python_version }}
+
+  publish:
+    if: always() && inputs.publish_collection && needs.lint.result == 'success' && needs.test.result == 'success' && (needs.schema-validation.result == 'success' || needs.schema-validation.result == 'skipped')
+    needs: [lint, test, schema-validation]
+    uses: ssongin/gha-ansible/.github/workflows/ansible-galaxy-publish.yml@master
+    with:
+      collection_source: ${{ inputs.collection_source }}
+      ansible_core_version: ${{ inputs.ansible_core_version }}
+    secrets:
+      galaxy_api_key: ${{ secrets.galaxy_api_key }}
+
+  execute:
+    if: always() && inputs.run_playbook && needs.lint.result == 'success' && needs.test.result == 'success' && (needs.schema-validation.result == 'success' || needs.schema-validation.result == 'skipped')
+    needs: [lint, test, schema-validation]
+    uses: ssongin/gha-ansible/.github/workflows/ansible-run.yml@master
+    with:
+      working_directory: ${{ inputs.working_directory }}
+      python_version: ${{ inputs.python_version }}
+      ansible_core_version: ${{ inputs.ansible_core_version }}
+      requirements_file: ${{ inputs.requirements_file }}
+      galaxy_requirements_file: ${{ inputs.galaxy_requirements_file }}
+      playbook: ${{ inputs.playbook }}
+      inventory: ${{ inputs.inventory }}
+      extra_args: ${{ inputs.extra_args }}
+    secrets:
+      vault_password: ${{ secrets.vault_password }}

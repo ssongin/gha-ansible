@@ -1,0 +1,32 @@
+name: Publish Ansible collection
+
+on:
+  workflow_call:
+    inputs:
+      collection_source:
+        description: Path to the collection source directory containing galaxy.yml
+        required: true
+        type: string
+      ansible_core_version:
+        description: ansible-core version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+    secrets:
+      galaxy_api_key:
+        description: Ansible Galaxy API key
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssongin/gha-ansible/.github/actions/ansible-galaxy-publish@master
+        with:
+          collection_source: ${{ inputs.collection_source }}
+          ansible_core_version: ${{ inputs.ansible_core_version }}
+          galaxy_api_key: ${{ secrets.galaxy_api_key }}

@@ -1,0 +1,45 @@
+name: Publish Ansible collection
+description: Publish a built collection artifact to Ansible Galaxy
+inputs:
+  collection_source:
+    description: Path to the collection source directory containing galaxy.yml
+    required: true
+  galaxy_api_key:
+    description: Ansible Galaxy API key
+    required: true
+  ansible_core_version:
+    description: ansible-core version; use latest for the current release
+    required: false
+    default: latest
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    - name: Install Ansible Galaxy client
+      shell: bash
+      env:
+        ANSIBLE_CORE_VERSION: ${{ inputs.ansible_core_version }}
+      run: |
+        python -m pip install --upgrade pip
+        if [[ "$ANSIBLE_CORE_VERSION" == "latest" ]]; then
+          python -m pip install ansible-core
+        else
+          python -m pip install "ansible-core==$ANSIBLE_CORE_VERSION"
+        fi
+    - name: Build and publish collection
+      shell: bash
+      env:
+        COLLECTION_SOURCE: ${{ inputs.collection_source }}
+        GALAXY_API_KEY: ${{ inputs.galaxy_api_key }}
+      run: |
+        output_directory="$(mktemp -d)"
+        trap 'rm -rf "$output_directory"' EXIT
+        ansible-galaxy collection build "$COLLECTION_SOURCE" --output-path "$output_directory"
+        archive="$(find "$output_directory" -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
+        if [[ -z "$archive" ]]; then
+          echo "::error::Collection build did not produce a tar.gz archive."
+          exit 1
+        fi
+        ansible-galaxy collection publish "$archive" --api-key "$GALAXY_API_KEY"

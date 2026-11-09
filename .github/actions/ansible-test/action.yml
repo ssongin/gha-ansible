@@ -1,0 +1,77 @@
+name: Ansible test
+description: Run Ansible syntax checks and optionally a Molecule test suite
+inputs:
+  working_directory:
+    description: Directory containing the Ansible project
+    required: false
+    default: .
+  python_version:
+    description: Python version used to install Ansible tools
+    required: false
+    default: '3.x'
+  ansible_core_version:
+    description: ansible-core version; use latest for the current release
+    required: false
+    default: latest
+  requirements_file:
+    description: Optional pip requirements file, relative to working_directory
+    required: false
+    default: ''
+  galaxy_requirements_file:
+    description: Optional Ansible Galaxy requirements file, relative to working_directory
+    required: false
+    default: ''
+  playbook:
+    description: Playbook file to check; leave empty to skip syntax checking
+    required: false
+    default: site.yml
+  molecule:
+    description: Run molecule test after syntax checking
+    required: false
+    default: 'false'
+  molecule_directory:
+    description: Directory containing molecule.yml; defaults to working_directory
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Install Ansible test dependencies
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        REQUIREMENTS_FILE: ${{ inputs.requirements_file }}
+        GALAXY_REQUIREMENTS_FILE: ${{ inputs.galaxy_requirements_file }}
+        ANSIBLE_CORE_VERSION: ${{ inputs.ansible_core_version }}
+        RUN_MOLECULE: ${{ inputs.molecule }}
+      run: |
+        python -m pip install --upgrade pip
+        if [[ -n "$REQUIREMENTS_FILE" ]]; then
+          python -m pip install -r "$WORKING_DIRECTORY/$REQUIREMENTS_FILE"
+        fi
+        if [[ "$ANSIBLE_CORE_VERSION" == "latest" ]]; then
+          python -m pip install ansible-core
+        else
+          python -m pip install "ansible-core==$ANSIBLE_CORE_VERSION"
+        fi
+        if [[ -n "$GALAXY_REQUIREMENTS_FILE" ]]; then
+          ansible-galaxy collection install -r "$WORKING_DIRECTORY/$GALAXY_REQUIREMENTS_FILE"
+        fi
+        if [[ "$RUN_MOLECULE" == "true" ]]; then
+          python -m pip install molecule
+        fi
+    - name: Check playbook syntax
+      if: inputs.playbook != ''
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        PLAYBOOK: ${{ inputs.playbook }}
+      run: ansible-playbook --syntax-check "$PLAYBOOK"
+    - name: Run Molecule tests
+      if: inputs.molecule == 'true'
+      shell: bash
+      working-directory: ${{ inputs.molecule_directory != '' && inputs.molecule_directory || inputs.working_directory }}
+      run: molecule test
