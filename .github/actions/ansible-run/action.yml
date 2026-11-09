@@ -1,0 +1,89 @@
+name: Run Ansible playbook
+description: Install Ansible dependencies and execute a playbook
+inputs:
+  working_directory:
+    description: Directory containing the Ansible project
+    required: false
+    default: .
+  python_version:
+    description: Python version used to install Ansible
+    required: false
+    default: '3.x'
+  ansible_core_version:
+    description: ansible-core version; use latest for the current release
+    required: false
+    default: latest
+  requirements_file:
+    description: Optional pip requirements file, relative to working_directory
+    required: false
+    default: ''
+  galaxy_requirements_file:
+    description: Optional Ansible Galaxy requirements file, relative to working_directory
+    required: false
+    default: ''
+  playbook:
+    description: Playbook file to execute
+    required: true
+  inventory:
+    description: Optional inventory path or inline inventory value
+    required: false
+    default: ''
+  extra_args:
+    description: Additional ansible-playbook arguments
+    required: false
+    default: ''
+  vault_password:
+    description: Optional Ansible Vault password
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Install Ansible dependencies
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        REQUIREMENTS_FILE: ${{ inputs.requirements_file }}
+        GALAXY_REQUIREMENTS_FILE: ${{ inputs.galaxy_requirements_file }}
+        ANSIBLE_CORE_VERSION: ${{ inputs.ansible_core_version }}
+      run: |
+        python -m pip install --upgrade pip
+        if [[ -n "$REQUIREMENTS_FILE" ]]; then
+          python -m pip install -r "$WORKING_DIRECTORY/$REQUIREMENTS_FILE"
+        fi
+        if [[ "$ANSIBLE_CORE_VERSION" == "latest" ]]; then
+          python -m pip install ansible-core
+        else
+          python -m pip install "ansible-core==$ANSIBLE_CORE_VERSION"
+        fi
+        if [[ -n "$GALAXY_REQUIREMENTS_FILE" ]]; then
+          ansible-galaxy collection install -r "$WORKING_DIRECTORY/$GALAXY_REQUIREMENTS_FILE"
+        fi
+    - name: Execute playbook
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        PLAYBOOK: ${{ inputs.playbook }}
+        INVENTORY: ${{ inputs.inventory }}
+        EXTRA_ARGS: ${{ inputs.extra_args }}
+        VAULT_PASSWORD: ${{ inputs.vault_password }}
+      run: |
+        args=()
+        if [[ -n "$INVENTORY" ]]; then
+          args+=(--inventory "$INVENTORY")
+        fi
+        if [[ -n "$VAULT_PASSWORD" ]]; then
+          vault_file="$(mktemp)"
+          chmod 600 "$vault_file"
+          trap 'rm -f "$vault_file"' EXIT
+          printf '%s' "$VAULT_PASSWORD" > "$vault_file"
+          args+=(--vault-password-file "$vault_file")
+        fi
+        if [[ -n "$EXTRA_ARGS" ]]; then
+          read -r -a extra_args <<< "$EXTRA_ARGS"
+          args+=("${extra_args[@]}")
+        fi
+        ansible-playbook "$PLAYBOOK" "${args[@]}"

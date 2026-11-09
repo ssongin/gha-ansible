@@ -1,0 +1,68 @@
+name: Run Ansible playbook
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing the Ansible project
+        required: false
+        default: .
+        type: string
+      python_version:
+        description: Python version used to install Ansible
+        required: false
+        default: '3.x'
+        type: string
+      ansible_core_version:
+        description: ansible-core version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+      requirements_file:
+        description: Optional pip requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      galaxy_requirements_file:
+        description: Optional Galaxy requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      playbook:
+        description: Playbook file to execute
+        required: true
+        type: string
+      inventory:
+        description: Optional inventory path or inline inventory value
+        required: false
+        default: ''
+        type: string
+      extra_args:
+        description: Additional ansible-playbook arguments
+        required: false
+        default: ''
+        type: string
+    secrets:
+      vault_password:
+        description: Optional Ansible Vault password
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssongin/gha-ansible/.github/actions/ansible-run@master
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          python_version: ${{ inputs.python_version }}
+          ansible_core_version: ${{ inputs.ansible_core_version }}
+          requirements_file: ${{ inputs.requirements_file }}
+          galaxy_requirements_file: ${{ inputs.galaxy_requirements_file }}
+          playbook: ${{ inputs.playbook }}
+          inventory: ${{ inputs.inventory }}
+          extra_args: ${{ inputs.extra_args }}
+          vault_password: ${{ secrets.vault_password }}

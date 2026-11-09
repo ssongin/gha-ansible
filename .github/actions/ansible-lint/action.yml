@@ -1,0 +1,45 @@
+name: Ansible lint
+description: Install ansible-lint and lint an Ansible project
+inputs:
+  working_directory:
+    description: Directory containing the Ansible project
+    required: false
+    default: .
+  python_version:
+    description: Python version used to install Ansible tools
+    required: false
+    default: '3.x'
+  ansible_lint_version:
+    description: ansible-lint version; use latest for the current release
+    required: false
+    default: latest
+  requirements_file:
+    description: Optional pip requirements file, relative to working_directory
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Install Ansible lint dependencies
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        REQUIREMENTS_FILE: ${{ inputs.requirements_file }}
+        ANSIBLE_LINT_VERSION: ${{ inputs.ansible_lint_version }}
+      run: |
+        python -m pip install --upgrade pip
+        if [[ -n "$REQUIREMENTS_FILE" ]]; then
+          python -m pip install -r "$WORKING_DIRECTORY/$REQUIREMENTS_FILE"
+        fi
+        if [[ "$ANSIBLE_LINT_VERSION" == "latest" ]]; then
+          python -m pip install ansible-lint
+        else
+          python -m pip install "ansible-lint==$ANSIBLE_LINT_VERSION"
+        fi
+    - name: Run ansible-lint
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: ansible-lint

@@ -1,0 +1,101 @@
+name: Validate Ansible variables against a schema
+description: Validate YAML variable files in selected group_vars or host_vars paths
+inputs:
+  working_directory:
+    description: Base directory for schema_file and vars_paths
+    required: false
+    default: .
+  schema_file:
+    description: JSON Schema file in JSON or YAML format
+    required: true
+  vars_paths:
+    description: Newline-separated YAML file or directory paths to validate
+    required: true
+  python_version:
+    description: Python version used to install the schema validator
+    required: false
+    default: '3.x'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Install schema validation dependencies
+      shell: bash
+      run: python -m pip install --upgrade jsonschema PyYAML
+    - name: Validate variable files
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        SCHEMA_FILE: ${{ inputs.schema_file }}
+        VARS_PATHS: ${{ inputs.vars_paths }}
+      run: |
+        python - <<'PY'
+        import os
+        from pathlib import Path
+
+        import yaml
+        from jsonschema.validators import validator_for
+
+        schema_path = Path(os.environ["SCHEMA_FILE"])
+        if not schema_path.is_file():
+            raise SystemExit(f"Schema file does not exist: {schema_path}")
+
+        with schema_path.open(encoding="utf-8") as schema_file:
+            schema = yaml.safe_load(schema_file)
+        if not isinstance(schema, dict):
+            raise SystemExit(f"Schema must be a YAML or JSON object: {schema_path}")
+
+        validator_type = validator_for(schema)
+        validator_type.check_schema(schema)
+        validator = validator_type(schema)
+
+        files = set()
+        for raw_path in os.environ["VARS_PATHS"].splitlines():
+            path_text = raw_path.strip()
+            if not path_text:
+                continue
+            path = Path(path_text)
+            if path.is_file():
+                if path.suffix.lower() in {".yml", ".yaml"}:
+                    files.add(path)
+                else:
+                    raise SystemExit(f"Variable file must use .yml or .yaml: {path}")
+            elif path.is_dir():
+                files.update(
+                    child for child in path.rglob("*")
+                    if child.is_file() and child.suffix.lower() in {".yml", ".yaml"}
+                )
+            else:
+                raise SystemExit(f"Variable path does not exist: {path}")
+
+        if not files:
+            raise SystemExit("No YAML variable files found in vars_paths")
+
+        failures = 0
+        for path in sorted(files):
+            try:
+                with path.open(encoding="utf-8") as variable_file:
+                    documents = list(yaml.safe_load_all(variable_file))
+            except yaml.YAMLError as error:
+                print(f"{path}: invalid YAML: {error}")
+                failures += 1
+                continue
+
+            for index, instance in enumerate(documents, start=1):
+                errors = sorted(
+                    validator.iter_errors(instance),
+                    key=lambda error: list(map(str, error.absolute_path))
+                )
+                if not errors:
+                    print(f"Valid: {path} (document {index})")
+                for error in errors:
+                    location = ".".join(map(str, error.absolute_path)) or "<root>"
+                    print(f"{path} (document {index}), {location}: {error.message}")
+                    failures += 1
+
+        if failures:
+            raise SystemExit(f"Schema validation failed with {failures} error(s)")
+        print(f"Schema validation passed for {len(files)} file(s)")
+        PY

@@ -1,0 +1,64 @@
+name: Ansible test
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing the Ansible project
+        required: false
+        default: .
+        type: string
+      python_version:
+        description: Python version used to install Ansible tools
+        required: false
+        default: '3.x'
+        type: string
+      ansible_core_version:
+        description: ansible-core version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+      requirements_file:
+        description: Optional pip requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      galaxy_requirements_file:
+        description: Optional Galaxy requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+      playbook:
+        description: Playbook file to check; empty skips syntax checking
+        required: false
+        default: site.yml
+        type: string
+      molecule:
+        description: Run molecule test after syntax checking
+        required: false
+        default: false
+        type: boolean
+      molecule_directory:
+        description: Directory containing molecule.yml; defaults to working_directory
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssongin/gha-ansible/.github/actions/ansible-test@master
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          python_version: ${{ inputs.python_version }}
+          ansible_core_version: ${{ inputs.ansible_core_version }}
+          requirements_file: ${{ inputs.requirements_file }}
+          galaxy_requirements_file: ${{ inputs.galaxy_requirements_file }}
+          playbook: ${{ inputs.playbook }}
+          molecule: ${{ inputs.molecule }}
+          molecule_directory: ${{ inputs.molecule_directory }}

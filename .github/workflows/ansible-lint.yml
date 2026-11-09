@@ -1,0 +1,40 @@
+name: Ansible lint
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Directory containing the Ansible project
+        required: false
+        default: .
+        type: string
+      python_version:
+        description: Python version used to install Ansible tools
+        required: false
+        default: '3.x'
+        type: string
+      ansible_lint_version:
+        description: ansible-lint version; use latest for the current release
+        required: false
+        default: latest
+        type: string
+      requirements_file:
+        description: Optional pip requirements file, relative to working_directory
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ssongin/gha-ansible/.github/actions/ansible-lint@master
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          python_version: ${{ inputs.python_version }}
+          ansible_lint_version: ${{ inputs.ansible_lint_version }}
+          requirements_file: ${{ inputs.requirements_file }}
